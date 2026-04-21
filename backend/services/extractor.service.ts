@@ -14,6 +14,7 @@ export interface StudentResult {
     roll_no: string;
     name: string;
     college: string;
+    center: string;
     sgpa: number | null;
     result: string | null;
     total_marks: number | null;
@@ -30,7 +31,32 @@ const SUBJECTS = [
     { code: "BTAIM507", name: "Mini Project", credit: 2 },
     { code: "BTAIOE505C", name: "Software Eng", credit: 4 },
     { code: "BTAIPE504A", name: "Advanced DBMS", credit: 4 },
+    { code: "BTCOF408", name: "Field Training / Internship / Industrial Training - II", credit: 0 },
 ];
+
+const RESULT_PATTERN = /(PASS\/PROMOTED|PASS|FAIL|ATKT)/i;
+
+function cleanName(value: string): string {
+    return value
+        .replace(/[^\p{L}\s.'-]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function pickLikelyName(candidates: string[]): string {
+    for (const line of candidates) {
+        const cleaned = cleanName(line)
+            .replace(/\b(whole|center|college|engineering|technology|institute|semester|result)\b/gi, "")
+            .replace(/\s+/g, " ")
+            .trim();
+        const words = cleaned.split(" ").filter(Boolean);
+        if (words.length >= 2 && words.length <= 6 && !/\d/.test(cleaned)) {
+            return cleaned;
+        }
+    }
+
+    return "Unknown Student";
+}
 
 export function extractData(text: string): StudentResult[] {
     console.log("--- DEBUG: Detailed Extraction Started ---");
@@ -49,6 +75,7 @@ export function extractData(text: string): StudentResult[] {
         const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         let name = "Unknown Student";
         let college = "Unknown College";
+        let center = "Unknown Center";
         
         // Heuristic: row format is often:
         // <roll_no> <name> <college_code> - <college_name> <sgpa> <result>
@@ -60,7 +87,7 @@ export function extractData(text: string): StudentResult[] {
             const collegeCodeMatch = headerAfterRoll.match(/\b\d{5}\b/);
             if (collegeCodeMatch && collegeCodeMatch.index !== undefined) {
                 const rawName = headerAfterRoll.slice(0, collegeCodeMatch.index).trim();
-                name = rawName.replace(/[^\p{L}\s.'-]/gu, " ").replace(/\s+/g, " ").trim() || name;
+                name = cleanName(rawName) || name;
 
                 const collegeStart = collegeCodeMatch.index;
                 const rawCollege = headerAfterRoll
@@ -73,7 +100,7 @@ export function extractData(text: string): StudentResult[] {
                 const rawName = headerAfterRoll
                     .replace(/\s+\d+\.\d{2}\s+(PASS|FAIL|ATKT|PASS\/PROMOTED)\b.*$/i, "")
                     .trim();
-                name = rawName.replace(/[^\p{L}\s.'-]/gu, " ").replace(/\s+/g, " ").trim() || name;
+                name = cleanName(rawName) || name;
             }
 
             if (college === "Unknown College" && headerIndex + 1 < lines.length) {
@@ -81,6 +108,36 @@ export function extractData(text: string): StudentResult[] {
                 if (maybeCollege.length > 8) {
                     college = maybeCollege;
                 }
+            }
+        }
+
+        // Fallback name extraction if header-based parsing fails
+        if (name === "Unknown Student" || name.length < 5) {
+            const candidateLines = lines
+                .slice(0, 6)
+                .map((line) =>
+                    line
+                        .replace(roll_no, "")
+                        .replace(/\b\d{5}\b.*/i, "")
+                        .replace(RESULT_PATTERN, "")
+                        .replace(/\b\d+\.\d{2}\b/g, "")
+                        .trim(),
+                )
+                .filter(Boolean);
+            name = pickLikelyName(candidateLines);
+        }
+
+        const centerMatch = block.match(/\b(\d{5}\s*\(Whole\))\b/i);
+        if (centerMatch) {
+            center = centerMatch[1];
+        } else if (college.match(/^\d{5}/)) {
+            center = `${college.slice(0, 5)} (Whole)`;
+        }
+
+        if (college === "Unknown College") {
+            const collegeLine = lines.find((line) => /\b\d{5}\b\s*-\s*.+/i.test(line) && /(college|institute|technology|polytechnic)/i.test(line));
+            if (collegeLine) {
+                college = collegeLine.replace(/\s+\d+\.\d{2}\s+(PASS|FAIL|ATKT|PASS\/PROMOTED)\b.*$/i, "").trim();
             }
         }
 
@@ -166,6 +223,7 @@ export function extractData(text: string): StudentResult[] {
             roll_no,
             name,
             college,
+            center,
             sgpa,
             result,
             total_marks,
