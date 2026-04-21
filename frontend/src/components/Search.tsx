@@ -43,7 +43,7 @@ const Search: React.FC<SearchProps> = ({ students, onSelect }) => {
                             <p className="font-bold truncate max-w-[150px]">{s.name}</p>
                             <p className="text-xs text-zinc-500 font-mono">{s.roll_no}</p>
                             <div className="mt-2 text-[10px] uppercase font-bold flex gap-2">
-                                <span className={s.result === 'PASS' ? 'text-green-500' : 'text-red-500'}>
+                                <span className={(s.result === 'PASS' || s.result === 'PASS/PROMOTED') ? 'text-green-500' : 'text-red-500'}>
                                     {s.result}
                                 </span>
                                 <span className="text-zinc-600">•</span>
@@ -52,6 +52,11 @@ const Search: React.FC<SearchProps> = ({ students, onSelect }) => {
                         </div>
                     </button>
                 ))}
+                {filtered.length === 0 && (
+                    <div className="col-span-full p-6 text-center text-zinc-500 border border-zinc-800 rounded-xl">
+                        No matching student found for &quot;{query}&quot;.
+                    </div>
+                )}
             </div>
         </div>
     );

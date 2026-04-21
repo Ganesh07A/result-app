@@ -36,7 +36,7 @@ export function extractData(text: string): StudentResult[] {
     console.log("--- DEBUG: Detailed Extraction Started ---");
     
     const normalizedText = text.replace(/\r\n/g, "\n");
-    const studentBlocks = normalizedText.split(/\n(?=\d{12,15})/);
+    const studentBlocks = normalizedText.split(/\n(?=\d{12,15}\b)/);
     const students: StudentResult[] = [];
 
     studentBlocks.forEach((block, index) => {
@@ -49,24 +49,46 @@ export function extractData(text: string): StudentResult[] {
         const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         let name = "Unknown Student";
         let college = "Unknown College";
-
-        // Heuristic: Name is usually on the same line as the roll number, college is on the following line
+        
+        // Heuristic: row format is often:
+        // <roll_no> <name> <college_code> - <college_name> <sgpa> <result>
         const headerIndex = lines.findIndex(l => l.includes(roll_no));
         if (headerIndex !== -1) {
             const headerLine = lines[headerIndex];
-            const namePart = headerLine.substring(headerLine.indexOf(roll_no) + roll_no.length).trim();
-            // Clean up name
-            name = namePart.split(/\s{2,}/)[0].split("/")[0].replace(/[0-9]/g, '').replace(/[-_]/g, '').trim();
-            
-            if (headerIndex + 1 < lines.length) {
-                 college = lines[headerIndex + 1].split("   ")[0].trim(); // Take first part
+            const headerAfterRoll = headerLine.substring(headerLine.indexOf(roll_no) + roll_no.length).trim();
+
+            const collegeCodeMatch = headerAfterRoll.match(/\b\d{5}\b/);
+            if (collegeCodeMatch && collegeCodeMatch.index !== undefined) {
+                const rawName = headerAfterRoll.slice(0, collegeCodeMatch.index).trim();
+                name = rawName.replace(/[^\p{L}\s.'-]/gu, " ").replace(/\s+/g, " ").trim() || name;
+
+                const collegeStart = collegeCodeMatch.index;
+                const rawCollege = headerAfterRoll
+                    .slice(collegeStart)
+                    .replace(/\s+\d+\.\d{2}\s+(PASS|FAIL|ATKT|PASS\/PROMOTED)\b.*$/i, "")
+                    .replace(/\s{2,}.*/g, "")
+                    .trim();
+                college = rawCollege || college;
+            } else {
+                const rawName = headerAfterRoll
+                    .replace(/\s+\d+\.\d{2}\s+(PASS|FAIL|ATKT|PASS\/PROMOTED)\b.*$/i, "")
+                    .trim();
+                name = rawName.replace(/[^\p{L}\s.'-]/gu, " ").replace(/\s+/g, " ").trim() || name;
+            }
+
+            if (college === "Unknown College" && headerIndex + 1 < lines.length) {
+                const maybeCollege = lines[headerIndex + 1].replace(/\s+\d+\.\d{2}\s+(PASS|FAIL|ATKT|PASS\/PROMOTED)\b.*$/i, "").trim();
+                if (maybeCollege.length > 8) {
+                    college = maybeCollege;
+                }
             }
         }
 
         // 2. Global Results
-        const sgpaMatch = block.match(/(\d+\.\d{2})/);
-        const resultMatch = block.match(/(PASS|FAIL|ATKT)/i);
-        const totalMarksMatch = block.match(/\b([3-6]\d{2})\b/); // Marks out of 700 usually in 300-600 range
+        const sgpaMatch = block.match(/\b(\d+\.\d{2})\b(?=\s+(PASS|FAIL|ATKT|PASS\/PROMOTED)\b)/i);
+        const resultMatch = block.match(/\b(PASS\/PROMOTED|PASS|FAIL|ATKT)\b/i);
+        const totalLineMatch = lines.find((line) => /\d+\.\d{2}\s+\d+\.\d{2}\s+\d{3}\b/.test(line));
+        const totalMarksMatch = totalLineMatch?.match(/(\d{3})\s*$/) || block.match(/\b([3-6]\d{2})\b/);
         
         const sgpa = sgpaMatch ? parseFloat(sgpaMatch[1]) : null;
         const result = resultMatch ? resultMatch[1].toUpperCase() : null;
@@ -88,8 +110,9 @@ export function extractData(text: string): StudentResult[] {
         let totRow: number[] = [];
 
         if (numberRows.length >= 4) {
-            // Take the last 4 number-only rows before the results string
-            const relevantRows = numberRows.slice(-4).map(r => r.split(/\s+/).filter(n => n !== "").map(Number));
+            // Take the first 4 plausible rows from the student block:
+            // ESE, Internal, MID, Total (as seen in DBATU format)
+            const relevantRows = numberRows.slice(0, 4).map(r => r.split(/\s+/).filter(n => n !== "").map(Number));
             eseRow = relevantRows[0];
             intRow = relevantRows[1];
             midRow = relevantRows[2];

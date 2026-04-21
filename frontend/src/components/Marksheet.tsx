@@ -32,13 +32,12 @@ interface MarksheetProps {
 export default function Marksheet({ student }: MarksheetProps) {
         const isPass = student.result === "PASS" || student.result === "PASS/PROMOTED";
     
-    // Extracted Display Name: strictly 3 words
-    const displayName = student.name.split(' ').slice(0, 3).join(' ');
+    const displayName = student.name?.trim() || "Unknown Student";
     
     // Fallback for College Name if extraction caught a number (like SGPA) by mistake
     const displayCollege = (student.college && !student.college.match(/^[\d.]+$/) && student.college.length > 5 && student.college !== "Unknown College") 
         ? student.college 
-        : "02112 - Shreeyash College of Engineering & Technology, Chhatrapati Sambhajinagar";
+        : "College information not available in source PDF";
 
     // Calculations for totals row
     const sumEse = student.subjects.reduce((sum, s) => sum + (Number(s.ese) || 0), 0);
@@ -144,7 +143,7 @@ export default function Marksheet({ student }: MarksheetProps) {
                                 <div className="flex-1 flex flex-col justify-center text-center p-2 gap-2">
                                     <div className="pb-2 border-b border-zinc-300">
                                          <span className="text-[10px] font-bold text-[#1a365d] uppercase block mb-0.5">SGPA</span>
-                                         <span className="font-bold text-lg text-green-600">{student.sgpa}</span>
+                                         <span className="font-bold text-lg text-green-600">{student.sgpa ?? "-"}</span>
                                     </div>
                                     <div>
                                          <span className="text-[10px] font-bold text-[#1a365d] uppercase block mb-0.5">Result</span>
@@ -249,7 +248,7 @@ export default function Marksheet({ student }: MarksheetProps) {
                                 </div>
                                 <div className="pt-2 border-r border-zinc-200">
                                     <p className="text-xs text-zinc-500 mb-1">SGPA</p>
-                                    <p className="text-xl font-bold text-green-600">{student.sgpa} <span className="text-xs text-zinc-400">/ 10</span></p>
+                                    <p className="text-xl font-bold text-green-600">{student.sgpa ?? "-"} <span className="text-xs text-zinc-400">/ 10</span></p>
                                 </div>
                                 <div className="pt-2">
                                     <p className="text-xs text-zinc-500 mb-1">Result</p>
