@@ -12,6 +12,7 @@ const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [status, setStatus] = useState<"idle" | "uploading" | "parsing" | "success">("idle");
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0];
@@ -42,7 +43,7 @@ const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
             // Processing state change for UX
             setTimeout(() => setStatus("parsing"), 1000);
 
-            const response = await fetch("http://localhost:5000/api/process-result", {
+            const response = await fetch(`${apiBaseUrl}/api/process-result`, {
                 method: "POST",
                 body: formData,
             });
